@@ -40,10 +40,10 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "firebase-admin": "^14.3.0",
-    "zod": "^3.23.0"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "typescript": "^5.7.0"
+    "@types/node": "^26.5.0",
+    "typescript": "^7.0.2"
   }
 }
