@@ -5,6 +5,9 @@ import {
   FieldValue,
   type DocumentData,
 } from "firebase-admin/firestore";
+import { writeFileSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /**
  * Converts a Firestore document's data to a JSON-safe format.
@@ -127,12 +130,40 @@ export function deserializeValue(value: unknown): unknown {
 }
 
 /**
- * Truncates a result to avoid overwhelming the LLM context.
+ * Serializes a result for return to the LLM. If the JSON is small enough it is
+ * returned inline. If it exceeds `maxLength`, the full result is written to a
+ * temp file instead and a short message pointing at that file is returned, so
+ * the LLM's context is not flooded but no data is lost.
  */
 export function truncateResult(data: unknown, maxLength = 50000): string {
   const json = JSON.stringify(data, null, 2);
   if (json.length <= maxLength) return json;
-  return json.slice(0, maxLength) + `\n\n... [truncated, total ${json.length} chars]`;
+
+  const filePath = writeLargeOutput(json);
+  return JSON.stringify(
+    {
+      status: "output_too_large",
+      message:
+        "The output was too large to return inline. The full result has been " +
+        "written to the file below. Read that file to access the complete data.",
+      filePath,
+      totalChars: json.length,
+      threshold: maxLength,
+    },
+    null,
+    2
+  );
+}
+
+/**
+ * Writes large output to a temp file and returns its absolute path.
+ * Each call uses a fresh temp directory to avoid collisions.
+ */
+export function writeLargeOutput(content: string, extension = "json"): string {
+  const dir = mkdtempSync(join(tmpdir(), "firebase-mcp-"));
+  const filePath = join(dir, `output.${extension}`);
+  writeFileSync(filePath, content, "utf8");
+  return filePath;
 }
 
 /**
