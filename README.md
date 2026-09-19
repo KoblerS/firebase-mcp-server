@@ -15,6 +15,7 @@ A command-based (stdio) [Model Context Protocol](https://modelcontextprotocol.io
 - **🔐 Auth Tools** — List, get, create, update, delete users & set custom claims
 - **📄 Firestore Tools** — Browse collections, read/write/query/delete documents
 - **📦 Storage Tools** — List, upload, download, copy, move & delete files, generate signed URLs
+- **⚡ Functions Tools** — List functions, read execution logs (paginated), invoke callable & scheduled functions
 - **🔍 Dynamic Credentials** — Automatically finds `.firebase/service-account.json` walking up from cwd
 - **📦 npx-ready** — Run directly with `npx firebase-mcp-server`, no global install needed
 
@@ -210,6 +211,17 @@ npx @modelcontextprotocol/inspector firebase-mcp
 | `storage_copy_file`         | Copy a file (same or different bucket)                              |
 | `storage_move_file`         | Move / rename a file                                                |
 
+### ⚡ Functions Tools
+
+| Tool                       | Description                                                              |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `functions_list`           | List Cloud Functions (Gen 2): state, trigger, runtime, URL               |
+| `functions_get_logs`       | Get function execution logs from Cloud Logging (paginated, filterable)   |
+| `functions_call_callable`  | Invoke an HTTPS Callable function (sends `{ data }`, unwraps `{ result }`)|
+| `functions_run_scheduled`  | Force an immediate run of a scheduled function via its Cloud Scheduler job|
+
+> **Note:** Scheduled (`onSchedule`) functions cannot be invoked directly — `functions_run_scheduled` triggers the underlying Cloud Scheduler job (typically named `firebase-schedule-<functionName>-<region>`). The service account needs the relevant Cloud Functions, Logging, and Cloud Scheduler IAM permissions.
+
 ## Usage Examples
 
 Once connected, you can ask your AI assistant things like:
@@ -264,7 +276,8 @@ firebase-mcp/
 │   └── tools/
 │       ├── auth.ts       # Firebase Auth tools (6)
 │       ├── firestore.ts  # Firestore tools (8)
-│       └── storage.ts    # Firebase Storage tools (9)
+│       ├── storage.ts    # Firebase Storage tools (9)
+│       └── functions.ts  # Cloud Functions tools (4)
 ├── dist/                 # Compiled output (after build)
 ├── package.json
 ├── tsconfig.json

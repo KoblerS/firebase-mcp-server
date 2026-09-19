@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { registerAuthTools } from "./tools/auth.js";
 import { registerFirestoreTools } from "./tools/firestore.js";
 import { registerStorageTools } from "./tools/storage.js";
+import { registerFunctionsTools } from "./tools/functions.js";
 import { getProjectId, initFirebase, setCredentialsOverride } from "./firebase.js";
 import { parseArgs } from "node:util";
 
@@ -75,6 +76,7 @@ async function main() {
   registerAuthTools(server);
   registerFirestoreTools(server);
   registerStorageTools(server);
+  registerFunctionsTools(server);
 
   // Connect via stdio transport
   const transport = new StdioServerTransport();
