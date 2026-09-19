@@ -116,6 +116,7 @@ firebase-mcp [options]
 Options:
   --service-account <path>   Explicit path to service account JSON file
   --project-dir <path>       Directory to search .firebase/service-account.json from
+  --max-output-size <chars>  Max inline output size before results spill to a temp file
   --help                     Show help
 ```
 
@@ -282,6 +283,40 @@ Make sure `.firebase/` is in your `.gitignore`:
 ```
 
 The service account key grants **full admin access** to your Firebase project. Treat it like a password.
+
+## Large Outputs
+
+Read operations that return more than the configured threshold (large collections, big documents, long file listings) are **not truncated**. Instead, the full result is written to a temporary file and the tool returns a short message telling the LLM the output was too large, along with the `filePath` to read:
+
+```json
+{
+  "status": "output_too_large",
+  "message": "The output was too large to return inline. The full result has been written to the file below. Read that file to access the complete data.",
+  "filePath": "/tmp/firebase-mcp-XXXXXX/output.json",
+  "totalChars": 128034,
+  "threshold": 25000
+}
+```
+
+This keeps the model's context from being flooded while ensuring no data is lost — the client can read the file on demand. Temp files are written to the OS temp directory (`os.tmpdir()`).
+
+### Configuring the threshold
+
+The threshold (in characters) is resolved in this order:
+
+1. `--max-output-size <chars>` CLI flag
+2. `FIREBASE_MCP_MAX_OUTPUT` environment variable
+3. Default: **25000** characters
+
+```bash
+# via CLI flag
+firebase-mcp --max-output-size 40000
+
+# via environment variable
+FIREBASE_MCP_MAX_OUTPUT=40000 firebase-mcp
+```
+
+Invalid values (non-numeric or ≤ 0) are ignored with a warning and the default is used.
 
 ## License
 
