@@ -6,7 +6,7 @@
 [![Node.js](https://img.shields.io/node/v/firebase-mcp-server.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org)
 [![MCP](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
-[![GitHub](https://img.shields.io/github/stars/KoblerS/firestore-mcp?style=social)](https://github.com/KoblerS/firestore-mcp)
+[![GitHub](https://img.shields.io/github/stars/KoblerS/firebase-mcp-server?style=social)](https://github.com/KoblerS/firebase-mcp-server)
 
 A command-based (stdio) [Model Context Protocol](https://modelcontextprotocol.io) server for **Google Firebase**, providing Auth, Firestore, and Storage tools. Credentials are loaded dynamically from your project directory.
 

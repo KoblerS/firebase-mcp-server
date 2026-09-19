@@ -29,11 +29,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KoblerS/firestore-mcp.git"
+    "url": "git+https://github.com/KoblerS/firebase-mcp-server.git"
   },
   "bugs": {
-    "url": "https://github.com/KoblerS/firestore-mcp/issues"
+    "url": "https://github.com/KoblerS/firebase-mcp-server/issues"
   },
+  "homepage": "https://github.com/KoblerS/firebase-mcp-server#readme",
   "engines": {
     "node": ">=20.0.0"
   },
