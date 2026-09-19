@@ -6,6 +6,7 @@ import { registerAuthTools } from "./tools/auth.js";
 import { registerFirestoreTools } from "./tools/firestore.js";
 import { registerStorageTools } from "./tools/storage.js";
 import { getProjectId, initFirebase, setCredentialsOverride } from "./firebase.js";
+import { setMaxOutputSize, getMaxOutputSize } from "./utils.js";
 import { parseArgs } from "node:util";
 
 function printUsage(): void {
@@ -18,6 +19,9 @@ Usage:
 Options:
   --service-account <path>   Path to service account JSON file
   --project-dir <path>       Project dir to search .firebase/service-account.json in
+  --max-output-size <chars>  Max inline output size in characters before results
+                             are written to a temp file (default: deduced from
+                             FIREBASE_MCP_MAX_OUTPUT env var, else 25000)
   --help                     Show this help
 
 Credential resolution order:
@@ -34,6 +38,7 @@ async function main() {
     options: {
       "service-account": { type: "string" },
       "project-dir": { type: "string" },
+      "max-output-size": { type: "string" },
       help: { type: "boolean", short: "h" },
     },
     strict: false,
@@ -53,6 +58,20 @@ async function main() {
     setCredentialsOverride({ serviceAccountPath: serviceAccount });
   } else if (typeof projectDir === "string") {
     setCredentialsOverride({ projectDir });
+  }
+
+  // Apply max output size override (CLI takes precedence over the env-deduced value)
+  const maxOutputSize = values["max-output-size"];
+  if (typeof maxOutputSize === "string") {
+    const parsed = Number(maxOutputSize);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setMaxOutputSize(parsed);
+    } else {
+      console.error(
+        `[firebase-mcp] Ignoring invalid --max-output-size="${maxOutputSize}" ` +
+        `(must be a positive number).`
+      );
+    }
   }
 
   // Initialize Firebase — fail fast with a clear error
@@ -81,6 +100,7 @@ async function main() {
   await server.connect(transport);
 
   console.error(`[firebase-mcp] Server running for project: ${projectId}`);
+  console.error(`[firebase-mcp] Max inline output size: ${getMaxOutputSize()} chars`);
   console.error(`[firebase-mcp] Connected via stdio transport`);
 }
 

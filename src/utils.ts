@@ -129,13 +129,62 @@ export function deserializeValue(value: unknown): unknown {
   return value;
 }
 
+/** Fallback max output size (in characters) when nothing else is configured. */
+export const DEFAULT_MAX_OUTPUT_SIZE = 25000;
+
+/** Env var used to deduce the max output size when no CLI value is given. */
+export const MAX_OUTPUT_ENV_VAR = "FIREBASE_MCP_MAX_OUTPUT";
+
+// Module-level configured value; resolved once at startup, overridable at runtime.
+let maxOutputSize = resolveMaxOutputSize();
+
+/**
+ * Deduces the max output size (in characters) from the environment, falling
+ * back to the built-in default. Resolution order:
+ *   1. FIREBASE_MCP_MAX_OUTPUT env var (positive integer)
+ *   2. DEFAULT_MAX_OUTPUT_SIZE
+ */
+export function resolveMaxOutputSize(): number {
+  const raw = process.env[MAX_OUTPUT_ENV_VAR];
+  if (raw !== undefined) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.floor(parsed);
+    }
+    console.error(
+      `[firebase-mcp] Ignoring invalid ${MAX_OUTPUT_ENV_VAR}="${raw}" ` +
+      `(must be a positive number); using default ${DEFAULT_MAX_OUTPUT_SIZE}.`
+    );
+  }
+  return DEFAULT_MAX_OUTPUT_SIZE;
+}
+
+/**
+ * Sets the max output size (in characters) used by truncateResult.
+ * Values <= 0 are ignored. Intended to be called once at startup from CLI args.
+ */
+export function setMaxOutputSize(size: number): void {
+  if (Number.isFinite(size) && size > 0) {
+    maxOutputSize = Math.floor(size);
+  }
+}
+
+/** Returns the currently configured max output size (in characters). */
+export function getMaxOutputSize(): number {
+  return maxOutputSize;
+}
+
 /**
  * Serializes a result for return to the LLM. If the JSON is small enough it is
- * returned inline. If it exceeds `maxLength`, the full result is written to a
- * temp file instead and a short message pointing at that file is returned, so
- * the LLM's context is not flooded but no data is lost.
+ * returned inline. If it exceeds the configured max output size, the full
+ * result is written to a temp file instead and a short message pointing at that
+ * file is returned, so the LLM's context is not flooded but no data is lost.
+ *
+ * The threshold defaults to the configured value (see getMaxOutputSize), which
+ * is deduced from the FIREBASE_MCP_MAX_OUTPUT env var or the --max-output-size
+ * CLI flag. Pass `maxLength` to override per call.
  */
-export function truncateResult(data: unknown, maxLength = 50000): string {
+export function truncateResult(data: unknown, maxLength: number = maxOutputSize): string {
   const json = JSON.stringify(data, null, 2);
   if (json.length <= maxLength) return json;
 
