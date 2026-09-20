@@ -106,6 +106,7 @@ let app: App | null = null;
 let authInstance: Auth | null = null;
 let firestoreInstance: Firestore | null = null;
 let storageInstance: Storage | null = null;
+let resolvedCredentialsPath: string | null = null;
 
 /**
  * Initializes Firebase Admin SDK with dynamically resolved credentials.
@@ -121,6 +122,7 @@ export function initFirebase(): App {
   }
 
   const credentialsPath = resolveCredentialsPath();
+  resolvedCredentialsPath = credentialsPath;
   const serviceAccount = JSON.parse(
     readFileSync(credentialsPath, "utf-8")
   ) as ServiceAccount;
@@ -132,6 +134,19 @@ export function initFirebase(): App {
 
   console.error(`[firebase-mcp] Initialized Firebase for project: ${serviceAccount.projectId}`);
   return app;
+}
+
+/**
+ * Returns the absolute path to the resolved service account key file.
+ * Used to configure Google Cloud client libraries (Logging, Functions,
+ * Scheduler) with the same credentials as the Admin SDK.
+ */
+export function getCredentialsPath(): string {
+  initFirebase();
+  if (!resolvedCredentialsPath) {
+    throw new Error("Credentials path is not available (Firebase not initialized).");
+  }
+  return resolvedCredentialsPath;
 }
 
 /**
