@@ -1,4 +1,4 @@
-import { initializeApp, cert, applicationDefault, getApps, type App, type ServiceAccount } from "firebase-admin/app";
+import { initializeApp, cert, applicationDefault, type App, type ServiceAccount, type Credential } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getStorage, type Storage } from "firebase-admin/storage";
@@ -185,97 +185,238 @@ function resolveCredentials(): ResolvedCredentials {
   );
 }
 
-let app: App | null = null;
+// Resolved once on first init, then reused to target other projects.
+let resolvedCredentials: ResolvedCredentials | null = null;
+let serviceAccountData: ServiceAccount | null = null;
+
+// Active app + its lazily-bound service instances.
+let activeApp: App | null = null;
+let activeProjectId: string | undefined;
 let authInstance: Auth | null = null;
 let firestoreInstance: Firestore | null = null;
 let storageInstance: Storage | null = null;
 
+// Cache of initialized apps, keyed by project ID, so switching back is cheap.
+const appsByProject = new Map<string, App>();
+
 /**
- * Initializes Firebase Admin SDK with dynamically resolved credentials.
- * Returns the same instance on subsequent calls.
+ * Builds a fresh Admin credential from the resolved credential source.
+ * The same underlying credential (service account key or local gcloud/ADC
+ * session) is reused regardless of which project it targets.
  */
-export function initFirebase(): App {
-  if (app) return app;
-
-  const existingApps = getApps();
-  if (existingApps.length > 0) {
-    app = existingApps[0]!;
-    return app;
+function buildCredential(): Credential {
+  if (resolvedCredentials?.type === "service-account" && serviceAccountData) {
+    return cert(serviceAccountData);
   }
-
-  const credentials = resolveCredentials();
-
-  if (credentials.type === "service-account") {
-    const serviceAccount = JSON.parse(
-      readFileSync(credentials.path, "utf-8")
-    ) as ServiceAccount;
-
-    app = initializeApp({
-      credential: cert(serviceAccount),
-      projectId: serviceAccount.projectId as string,
-    });
-
-    console.error(`[firebase-mcp] Initialized Firebase for project: ${serviceAccount.projectId}`);
-    return app;
-  }
-
-  // Application Default Credentials (local gcloud session / GCE metadata).
-  if (!credentials.projectId) {
-    throw new Error(
-      `Using the local gcloud session (Application Default Credentials), but no ` +
-      `project ID could be determined.\n\n` +
-      `Set one of these:\n` +
-      `  • gcloud config set project <your-project-id>\n` +
-      `  • GOOGLE_CLOUD_PROJECT environment variable`
-    );
-  }
-
-  app = initializeApp({
-    credential: applicationDefault(),
-    projectId: credentials.projectId,
-  });
-
-  console.error(`[firebase-mcp] Initialized Firebase for project: ${credentials.projectId}`);
-  return app;
+  return applicationDefault();
 }
 
 /**
- * Returns the Firebase Auth instance (lazy-initialized).
+ * Returns a cached Admin app for the given project ID, creating one if needed.
+ * Each project gets its own named app so multiple can coexist.
+ */
+function appForProject(projectId: string): App {
+  const existing = appsByProject.get(projectId);
+  if (existing) return existing;
+
+  const created = initializeApp(
+    { credential: buildCredential(), projectId },
+    projectId
+  );
+  appsByProject.set(projectId, created);
+  return created;
+}
+
+/**
+ * Initializes Firebase Admin SDK with dynamically resolved credentials.
+ * Returns the active app; subsequent calls reuse it.
+ */
+export function initFirebase(): App {
+  if (activeApp) return activeApp;
+
+  resolvedCredentials = resolveCredentials();
+
+  let projectId: string | undefined;
+  if (resolvedCredentials.type === "service-account") {
+    // Google service-account keys use snake_case (project_id); accept both.
+    const raw = JSON.parse(
+      readFileSync(resolvedCredentials.path, "utf-8")
+    ) as Record<string, unknown>;
+    serviceAccountData = raw as ServiceAccount;
+    projectId =
+      (raw.project_id as string | undefined) ??
+      (raw.projectId as string | undefined);
+    if (!projectId) {
+      throw new Error(
+        `Service account file is missing "project_id": ${resolvedCredentials.path}`
+      );
+    }
+  } else {
+    // Application Default Credentials (local gcloud session / GCE metadata).
+    projectId = resolvedCredentials.projectId;
+    if (!projectId) {
+      throw new Error(
+        `Using the local gcloud session (Application Default Credentials), but no ` +
+        `project ID could be determined.\n\n` +
+        `Set one of these:\n` +
+        `  • gcloud config set project <your-project-id>\n` +
+        `  • GOOGLE_CLOUD_PROJECT environment variable`
+      );
+    }
+  }
+
+  activeApp = appForProject(projectId);
+  activeProjectId = projectId;
+
+  console.error(`[firebase-mcp] Initialized Firebase for project: ${projectId}`);
+  return activeApp;
+}
+
+/**
+ * Switches the active project at runtime, reusing the same credentials.
+ * All subsequent tool calls operate against the new project. Returns the
+ * now-active project ID.
+ *
+ * Note: this only works if the underlying credentials have access to the
+ * target project (typically a local gcloud/ADC session, or a service account
+ * granted cross-project IAM roles).
+ */
+export function switchProject(projectId: string): string {
+  const target = projectId.trim();
+  if (!target) {
+    throw new Error("Project ID must not be empty.");
+  }
+
+  initFirebase();
+
+  if (target === activeProjectId) {
+    return activeProjectId;
+  }
+
+  activeApp = appForProject(target);
+  activeProjectId = target;
+
+  // Reset bound service instances so getters rebind to the new app.
+  authInstance = null;
+  firestoreInstance = null;
+  storageInstance = null;
+
+  console.error(`[firebase-mcp] Switched active project to: ${target}`);
+  return target;
+}
+
+/**
+ * Lists the Google Cloud projects the active credentials can access, via the
+ * Cloud Resource Manager API. Requires the API to be enabled and the
+ * credentials to have resourcemanager.projects.list permission.
+ */
+export async function listAccessibleProjects(): Promise<
+  Array<{
+    projectId: string;
+    name?: string;
+    projectNumber?: string;
+    state?: string;
+    active: boolean;
+  }>
+> {
+  const app = initFirebase();
+  const credential = app.options.credential;
+  if (!credential) {
+    throw new Error("No credential available on the active Firebase app.");
+  }
+
+  const { access_token: accessToken } = await credential.getAccessToken();
+
+  const results: Array<{
+    projectId: string;
+    name?: string;
+    projectNumber?: string;
+    state?: string;
+    active: boolean;
+  }> = [];
+
+  let pageToken: string | undefined;
+  do {
+    const url = new URL("https://cloudresourcemanager.googleapis.com/v1/projects");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(
+        `Cloud Resource Manager API returned ${res.status} ${res.statusText}.\n` +
+        `${body}\n\n` +
+        `Make sure the Cloud Resource Manager API is enabled and the active ` +
+        `credentials have permission to list projects.`
+      );
+    }
+
+    const data = (await res.json()) as {
+      projects?: Array<{
+        projectId: string;
+        name?: string;
+        projectNumber?: string;
+        lifecycleState?: string;
+      }>;
+      nextPageToken?: string;
+    };
+
+    for (const p of data.projects ?? []) {
+      results.push({
+        projectId: p.projectId,
+        name: p.name,
+        projectNumber: p.projectNumber,
+        state: p.lifecycleState,
+        active: p.projectId === activeProjectId,
+      });
+    }
+
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return results;
+}
+
+/**
+ * Returns the Firebase Auth instance for the active project (lazy-bound).
  */
 export function getAuthInstance(): Auth {
   if (!authInstance) {
-    initFirebase();
-    authInstance = getAuth();
+    const app = initFirebase();
+    authInstance = getAuth(app);
   }
   return authInstance;
 }
 
 /**
- * Returns the Firestore instance (lazy-initialized).
+ * Returns the Firestore instance for the active project (lazy-bound).
  */
 export function getFirestoreInstance(): Firestore {
   if (!firestoreInstance) {
-    initFirebase();
-    firestoreInstance = getFirestore();
+    const app = initFirebase();
+    firestoreInstance = getFirestore(app);
   }
   return firestoreInstance;
 }
 
 /**
- * Returns the Firebase Storage instance (lazy-initialized).
+ * Returns the Firebase Storage instance for the active project (lazy-bound).
  */
 export function getStorageInstance(): Storage {
   if (!storageInstance) {
-    initFirebase();
-    storageInstance = getStorage();
+    const app = initFirebase();
+    storageInstance = getStorage(app);
   }
   return storageInstance;
 }
 
 /**
- * Returns the project ID from the initialized app.
+ * Returns the currently active project ID.
  */
 export function getProjectId(): string | undefined {
-  const firebaseApp = initFirebase();
-  return firebaseApp.options.projectId ?? undefined;
+  initFirebase();
+  return activeProjectId;
 }

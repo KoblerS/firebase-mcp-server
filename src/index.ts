@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { registerAuthTools } from "./tools/auth.js";
 import { registerFirestoreTools } from "./tools/firestore.js";
 import { registerStorageTools } from "./tools/storage.js";
+import { registerProjectTools } from "./tools/project.js";
 import { getProjectId, initFirebase, setCredentialsOverride } from "./firebase.js";
 import { setMaxOutputSize, getMaxOutputSize } from "./utils.js";
 import { parseArgs } from "node:util";
@@ -93,6 +94,7 @@ async function main() {
   });
 
   // Register all tools
+  registerProjectTools(server);
   registerAuthTools(server);
   registerFirestoreTools(server);
   registerStorageTools(server);

@@ -12,6 +12,7 @@ A command-based (stdio) [Model Context Protocol](https://modelcontextprotocol.io
 
 ## Features
 
+- **🗂️ Project Tools** — Show the active project, list accessible projects & switch at runtime
 - **🔐 Auth Tools** — List, get, create, update, delete users & set custom claims
 - **📄 Firestore Tools** — Browse collections, read/write/query/delete documents
 - **📦 Storage Tools** — List, upload, download, copy, move & delete files, generate signed URLs
@@ -176,6 +177,19 @@ npx @modelcontextprotocol/inspector firebase-mcp
 ```
 
 ## Available Tools
+
+### 🗂️ Project Tools
+
+| Tool                       | Description                                              |
+| -------------------------- | ------------------------------------------------------- |
+| `firebase_current_project` | Show the project the server is currently operating on   |
+| `firebase_list_projects`   | List projects the active credentials can access         |
+| `firebase_switch_project`  | Switch the active project at runtime (same credentials) |
+
+> `firebase_list_projects` and `firebase_switch_project` work best with a local
+> gcloud session (`gcloud auth application-default login`) or a service account
+> that has cross-project access. `firebase_list_projects` uses the Cloud
+> Resource Manager API, which must be enabled for the credentials.
 
 ### 🔐 Auth Tools
 
