@@ -7,6 +7,7 @@ import { registerFirestoreTools } from "./tools/firestore.js";
 import { registerStorageTools } from "./tools/storage.js";
 import { registerFunctionsTools } from "./tools/functions.js";
 import { registerProjectTools } from "./tools/project.js";
+import { registerBillingTools } from "./tools/billing.js";
 import { getProjectId, initFirebase, setCredentialsOverride } from "./firebase.js";
 import { setMaxOutputSize, getMaxOutputSize } from "./utils.js";
 import { parseArgs } from "node:util";
@@ -96,6 +97,7 @@ async function main() {
 
   // Register all tools
   registerProjectTools(server);
+  registerBillingTools(server);
   registerAuthTools(server);
   registerFirestoreTools(server);
   registerStorageTools(server);
