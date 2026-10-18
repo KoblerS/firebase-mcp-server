@@ -29,6 +29,8 @@ Credential resolution order:
   2. .firebase/service-account.json (walked up from --project-dir or cwd)
   3. GOOGLE_APPLICATION_CREDENTIALS env var
   4. FIREBASE_SERVICE_ACCOUNT_PATH env var
+  5. Local gcloud session / Application Default Credentials
+     (gcloud auth application-default login)
 `);
 }
 

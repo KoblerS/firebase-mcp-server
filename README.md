@@ -128,6 +128,10 @@ The server searches for credentials in this order:
 2. **`.firebase/service-account.json`** — Walked up from `--project-dir` or `cwd` (like `.git` lookup)
 3. **`GOOGLE_APPLICATION_CREDENTIALS`** — Standard Google Cloud env var
 4. **`FIREBASE_SERVICE_ACCOUNT_PATH`** — Custom env var for explicit path
+5. **Local `gcloud` session (Application Default Credentials)** — Fallback when no
+   service account is found. Run `gcloud auth application-default login` once, and the
+   server reuses that session. The project ID is taken from `GOOGLE_CLOUD_PROJECT`, the
+   ADC file's `quota_project_id`, or `gcloud config get-value project`.
 
 ### How does this work with Claude Code?
 
