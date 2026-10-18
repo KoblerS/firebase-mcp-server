@@ -197,6 +197,10 @@ let firestoreInstance: Firestore | null = null;
 let storageInstance: Storage | null = null;
 let resolvedCredentialsPath: string | null = null;
 
+// Active Storage bucket override. When unset, the project default bucket is
+// used. Scoped per project — reset whenever the active project changes.
+let activeBucket: string | undefined;
+
 // Cache of initialized apps, keyed by project ID, so switching back is cheap.
 const appsByProject = new Map<string, App>();
 
@@ -313,6 +317,8 @@ export function switchProject(projectId: string): string {
   authInstance = null;
   firestoreInstance = null;
   storageInstance = null;
+  // The bucket override belongs to the previous project; reset to its default.
+  activeBucket = undefined;
 
   console.error(`[firebase-mcp] Switched active project to: ${target}`);
   return target;
@@ -424,6 +430,122 @@ export function getStorageInstance(): Storage {
     storageInstance = getStorage(app);
   }
   return storageInstance;
+}
+
+/**
+ * Returns the default Storage bucket name for the active project.
+ */
+export function getDefaultBucketName(): string {
+  const projectId = getProjectId();
+  if (!projectId) {
+    throw new Error("No active project — cannot derive a default bucket name.");
+  }
+  return `${projectId}.firebasestorage.app`;
+}
+
+/**
+ * Resolves which bucket a Storage operation should target:
+ *   1. an explicit per-call bucket name (highest priority)
+ *   2. the active bucket set via switchBucket()
+ *   3. the project default bucket
+ */
+export function resolveBucketName(explicitBucket?: string): string {
+  if (explicitBucket && explicitBucket.trim()) return explicitBucket.trim();
+  if (activeBucket) return activeBucket;
+  return getDefaultBucketName();
+}
+
+/**
+ * Returns the currently active bucket override, or undefined when the project
+ * default bucket is in use.
+ */
+export function getActiveBucket(): string | undefined {
+  return activeBucket;
+}
+
+/**
+ * Sets the active Storage bucket for subsequent operations. Pass no name (or
+ * an empty string) to reset back to the project default bucket. Returns the
+ * bucket name now in effect.
+ */
+export function switchBucket(bucketName?: string): string {
+  initFirebase();
+  const target = bucketName?.trim();
+  if (!target) {
+    activeBucket = undefined;
+    const def = getDefaultBucketName();
+    console.error(`[firebase-mcp] Reset active bucket to project default: ${def}`);
+    return def;
+  }
+  activeBucket = target;
+  console.error(`[firebase-mcp] Switched active bucket to: ${target}`);
+  return target;
+}
+
+/**
+ * Lists the Cloud Storage buckets in the active project via the GCS JSON API.
+ * Requires the credentials to have storage.buckets.list permission.
+ */
+export async function listStorageBuckets(): Promise<
+  Array<{ name: string; location?: string; storageClass?: string; active: boolean }>
+> {
+  const app = initFirebase();
+  const credential = app.options.credential;
+  if (!credential) {
+    throw new Error("No credential available on the active Firebase app.");
+  }
+  const projectId = getProjectId();
+  if (!projectId) {
+    throw new Error("No active project — cannot list buckets.");
+  }
+
+  const { access_token: accessToken } = await credential.getAccessToken();
+  const current = resolveBucketName();
+
+  const results: Array<{
+    name: string;
+    location?: string;
+    storageClass?: string;
+    active: boolean;
+  }> = [];
+
+  let pageToken: string | undefined;
+  do {
+    const url = new URL("https://storage.googleapis.com/storage/v1/b");
+    url.searchParams.set("project", projectId);
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(
+        `Cloud Storage API returned ${res.status} ${res.statusText}.\n${body}\n\n` +
+        `Make sure the credentials have permission to list buckets ` +
+        `(storage.buckets.list) in project ${projectId}.`
+      );
+    }
+
+    const data = (await res.json()) as {
+      items?: Array<{ name: string; location?: string; storageClass?: string }>;
+      nextPageToken?: string;
+    };
+
+    for (const b of data.items ?? []) {
+      results.push({
+        name: b.name,
+        location: b.location,
+        storageClass: b.storageClass,
+        active: b.name === current,
+      });
+    }
+
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return results;
 }
 
 /**

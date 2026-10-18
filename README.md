@@ -15,7 +15,7 @@ A command-based (stdio) [Model Context Protocol](https://modelcontextprotocol.io
 - **🗂️ Project Tools** — Show the active project, list accessible projects & switch at runtime
 - **🔐 Auth Tools** — List, get, create, update, delete users & set custom claims
 - **📄 Firestore Tools** — Browse collections, read/write/query/delete documents
-- **📦 Storage Tools** — List, upload, download, copy, move & delete files, generate signed URLs
+- **📦 Storage Tools** — Multiple buckets (list & switch), upload, download, copy, move & delete files, signed URLs
 - **⚡ Functions Tools** — List functions, read execution logs (paginated), invoke callable & scheduled functions
 - **🔍 Dynamic Credentials** — Automatically finds `.firebase/service-account.json` walking up from cwd
 - **📦 npx-ready** — Run directly with `npx firebase-mcp-server`, no global install needed
@@ -220,6 +220,9 @@ npx @modelcontextprotocol/inspector firebase-mcp
 
 | Tool                        | Description                                                         |
 | --------------------------- | ------------------------------------------------------------------- |
+| `storage_list_buckets`      | List the Cloud Storage buckets in the active project                |
+| `storage_current_bucket`    | Show the bucket operations currently default to                     |
+| `storage_switch_bucket`     | Set the default bucket for subsequent operations (empty = reset)    |
 | `storage_list_files`        | List files & folders in a bucket (with prefix filter, pagination)   |
 | `storage_get_file_metadata` | Get file metadata (size, content type, timestamps, custom metadata) |
 | `storage_get_download_url`  | Get a Firebase download URL for a file                              |
@@ -229,6 +232,13 @@ npx @modelcontextprotocol/inspector firebase-mcp
 | `storage_delete_file`       | Delete a file                                                       |
 | `storage_copy_file`         | Copy a file (same or different bucket)                              |
 | `storage_move_file`         | Move / rename a file                                                |
+
+> **Multiple buckets:** every file tool accepts an optional `bucket` argument to
+> target a specific bucket per call. `storage_switch_bucket` changes the default
+> bucket for all subsequent calls (call it with no bucket to reset to the project
+> default). Bucket resolution is: explicit `bucket` arg → active bucket → project
+> default (`<project-id>.firebasestorage.app`). The active bucket resets when you
+> switch projects.
 
 ### ⚡ Functions Tools
 

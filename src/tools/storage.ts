@@ -1,17 +1,120 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getStorageInstance, getProjectId } from "../firebase.js";
+import {
+  getStorageInstance,
+  resolveBucketName,
+  getActiveBucket,
+  getDefaultBucketName,
+  switchBucket,
+  listStorageBuckets,
+} from "../firebase.js";
 import { getDownloadURL } from "firebase-admin/storage";
 import { formatError, truncateResult } from "../utils.js";
 
 function getBucket(bucketName?: string) {
   const storage = getStorageInstance();
-  if (bucketName) return storage.bucket(bucketName);
-  const projectId = getProjectId();
-  return storage.bucket(`${projectId}.firebasestorage.app`);
+  // Priority: explicit per-call bucket → active bucket → project default.
+  return storage.bucket(resolveBucketName(bucketName));
 }
 
 export function registerStorageTools(server: McpServer): void {
+  // ─── Current Bucket ─────────────────────────────────────────
+  server.registerTool(
+    "storage_current_bucket",
+    {
+      description: "Show the Storage bucket operations currently target by default",
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+      },
+    },
+    async () => {
+      try {
+        const active = getActiveBucket();
+        const def = getDefaultBucketName();
+        return {
+          content: [{
+            type: "text",
+            text: truncateResult({
+              activeBucket: resolveBucketName(),
+              isDefault: !active,
+              defaultBucket: def,
+            }),
+          }],
+        };
+      } catch (error) {
+        return { content: [{ type: "text", text: formatError(error) }], isError: true };
+      }
+    }
+  );
+
+  // ─── List Buckets ───────────────────────────────────────────
+  server.registerTool(
+    "storage_list_buckets",
+    {
+      description:
+        "List the Cloud Storage buckets in the active project (via the GCS API). " +
+        "Requires the credentials to have storage.buckets.list permission.",
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+      },
+    },
+    async () => {
+      try {
+        const buckets = await listStorageBuckets();
+        return {
+          content: [{
+            type: "text",
+            text: truncateResult({
+              buckets,
+              total: buckets.length,
+              activeBucket: resolveBucketName(),
+            }),
+          }],
+        };
+      } catch (error) {
+        return { content: [{ type: "text", text: formatError(error) }], isError: true };
+      }
+    }
+  );
+
+  // ─── Switch Bucket ──────────────────────────────────────────
+  server.registerTool(
+    "storage_switch_bucket",
+    {
+      description:
+        "Set the default bucket for subsequent Storage operations. Pass an empty " +
+        "bucket to reset back to the project default. Individual tool calls can " +
+        "still override this with their own `bucket` argument.",
+      inputSchema: {
+        bucket: z
+          .string()
+          .optional()
+          .describe("Bucket name to make active. Omit/empty to reset to the project default."),
+      },
+    },
+    async ({ bucket }) => {
+      try {
+        const previous = resolveBucketName();
+        const active = switchBucket(bucket);
+        return {
+          content: [{
+            type: "text",
+            text: truncateResult({
+              status: "switched",
+              previousBucket: previous,
+              activeBucket: active,
+              isDefault: !getActiveBucket(),
+            }),
+          }],
+        };
+      } catch (error) {
+        return { content: [{ type: "text", text: formatError(error) }], isError: true };
+      }
+    }
+  );
+
   // ─── List Files ─────────────────────────────────────────────
   server.registerTool(
     "storage_list_files",
