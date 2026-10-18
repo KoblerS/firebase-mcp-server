@@ -39,6 +39,9 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@google-cloud/functions": "^5.1.0",
+    "@google-cloud/logging": "^12.1.0",
+    "@google-cloud/scheduler": "^6.1.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "firebase-admin": "^14.3.0",
     "zod": "^3.23.0"

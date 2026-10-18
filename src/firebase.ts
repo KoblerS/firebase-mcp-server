@@ -195,6 +195,7 @@ let activeProjectId: string | undefined;
 let authInstance: Auth | null = null;
 let firestoreInstance: Firestore | null = null;
 let storageInstance: Storage | null = null;
+let resolvedCredentialsPath: string | null = null;
 
 // Cache of initialized apps, keyed by project ID, so switching back is cheap.
 const appsByProject = new Map<string, App>();
@@ -239,6 +240,7 @@ export function initFirebase(): App {
   let projectId: string | undefined;
   if (resolvedCredentials.type === "service-account") {
     // Google service-account keys use snake_case (project_id); accept both.
+    resolvedCredentialsPath = resolvedCredentials.path;
     const raw = JSON.parse(
       readFileSync(resolvedCredentials.path, "utf-8")
     ) as Record<string, unknown>;
@@ -270,6 +272,17 @@ export function initFirebase(): App {
 
   console.error(`[firebase-mcp] Initialized Firebase for project: ${projectId}`);
   return activeApp;
+}
+
+/**
+ * Returns the absolute path to the resolved service account key file, if one
+ * was used. Returns undefined when authenticating via a local gcloud session /
+ * Application Default Credentials — in that case Google Cloud client libraries
+ * (Logging, Functions, Scheduler) fall back to ADC automatically.
+ */
+export function getCredentialsPath(): string | undefined {
+  initFirebase();
+  return resolvedCredentialsPath ?? undefined;
 }
 
 /**
