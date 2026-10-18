@@ -15,7 +15,12 @@ let loggingClient: Logging | null = null;
 let schedulerClient: InstanceType<typeof CloudSchedulerClient> | null = null;
 
 function clientOptions() {
-  return { projectId: getProjectId(), keyFilename: getCredentialsPath() };
+  // With a service-account key we pass keyFilename explicitly; with a local
+  // gcloud session / ADC we omit it so the client libraries pick up ADC.
+  const keyFilename = getCredentialsPath();
+  return keyFilename
+    ? { projectId: getProjectId(), keyFilename }
+    : { projectId: getProjectId() };
 }
 
 function getFunctionsClient() {

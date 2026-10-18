@@ -12,6 +12,7 @@ A command-based (stdio) [Model Context Protocol](https://modelcontextprotocol.io
 
 ## Features
 
+- **🗂️ Project Tools** — Show the active project, list accessible projects & switch at runtime
 - **🔐 Auth Tools** — List, get, create, update, delete users & set custom claims
 - **📄 Firestore Tools** — Browse collections, read/write/query/delete documents
 - **📦 Storage Tools** — List, upload, download, copy, move & delete files, generate signed URLs
@@ -117,6 +118,7 @@ firebase-mcp [options]
 Options:
   --service-account <path>   Explicit path to service account JSON file
   --project-dir <path>       Directory to search .firebase/service-account.json from
+  --max-output-size <chars>  Max inline output size before results spill to a temp file
   --help                     Show help
 ```
 
@@ -128,6 +130,10 @@ The server searches for credentials in this order:
 2. **`.firebase/service-account.json`** — Walked up from `--project-dir` or `cwd` (like `.git` lookup)
 3. **`GOOGLE_APPLICATION_CREDENTIALS`** — Standard Google Cloud env var
 4. **`FIREBASE_SERVICE_ACCOUNT_PATH`** — Custom env var for explicit path
+5. **Local `gcloud` session (Application Default Credentials)** — Fallback when no
+   service account is found. Run `gcloud auth application-default login` once, and the
+   server reuses that session. The project ID is taken from `GOOGLE_CLOUD_PROJECT`, the
+   ADC file's `quota_project_id`, or `gcloud config get-value project`.
 
 ### How does this work with Claude Code?
 
@@ -172,6 +178,19 @@ npx @modelcontextprotocol/inspector firebase-mcp
 ```
 
 ## Available Tools
+
+### 🗂️ Project Tools
+
+| Tool                       | Description                                              |
+| -------------------------- | ------------------------------------------------------- |
+| `firebase_current_project` | Show the project the server is currently operating on   |
+| `firebase_list_projects`   | List projects the active credentials can access         |
+| `firebase_switch_project`  | Switch the active project at runtime (same credentials) |
+
+> `firebase_list_projects` and `firebase_switch_project` work best with a local
+> gcloud session (`gcloud auth application-default login`) or a service account
+> that has cross-project access. `firebase_list_projects` uses the Cloud
+> Resource Manager API, which must be enabled for the credentials.
 
 ### 🔐 Auth Tools
 
@@ -295,6 +314,40 @@ Make sure `.firebase/` is in your `.gitignore`:
 ```
 
 The service account key grants **full admin access** to your Firebase project. Treat it like a password.
+
+## Large Outputs
+
+Read operations that return more than the configured threshold (large collections, big documents, long file listings) are **not truncated**. Instead, the full result is written to a temporary file and the tool returns a short message telling the LLM the output was too large, along with the `filePath` to read:
+
+```json
+{
+  "status": "output_too_large",
+  "message": "The output was too large to return inline. The full result has been written to the file below. Read that file to access the complete data.",
+  "filePath": "/tmp/firebase-mcp-XXXXXX/output.json",
+  "totalChars": 128034,
+  "threshold": 25000
+}
+```
+
+This keeps the model's context from being flooded while ensuring no data is lost — the client can read the file on demand. Temp files are written to the OS temp directory (`os.tmpdir()`).
+
+### Configuring the threshold
+
+The threshold (in characters) is resolved in this order:
+
+1. `--max-output-size <chars>` CLI flag
+2. `FIREBASE_MCP_MAX_OUTPUT` environment variable
+3. Default: **25000** characters
+
+```bash
+# via CLI flag
+firebase-mcp --max-output-size 40000
+
+# via environment variable
+FIREBASE_MCP_MAX_OUTPUT=40000 firebase-mcp
+```
+
+Invalid values (non-numeric or ≤ 0) are ignored with a warning and the default is used.
 
 ## License
 
