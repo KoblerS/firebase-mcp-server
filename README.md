@@ -12,6 +12,7 @@ A command-based (stdio) [Model Context Protocol](https://modelcontextprotocol.io
 
 ## Features
 
+- **🗂️ Project Tools** — Show the active project, list accessible projects & switch at runtime
 - **🔐 Auth Tools** — List, get, create, update, delete users & set custom claims
 - **📄 Firestore Tools** — Browse collections, read/write/query/delete documents
 - **📦 Storage Tools** — List, upload, download, copy, move & delete files, generate signed URLs
@@ -128,6 +129,10 @@ The server searches for credentials in this order:
 2. **`.firebase/service-account.json`** — Walked up from `--project-dir` or `cwd` (like `.git` lookup)
 3. **`GOOGLE_APPLICATION_CREDENTIALS`** — Standard Google Cloud env var
 4. **`FIREBASE_SERVICE_ACCOUNT_PATH`** — Custom env var for explicit path
+5. **Local `gcloud` session (Application Default Credentials)** — Fallback when no
+   service account is found. Run `gcloud auth application-default login` once, and the
+   server reuses that session. The project ID is taken from `GOOGLE_CLOUD_PROJECT`, the
+   ADC file's `quota_project_id`, or `gcloud config get-value project`.
 
 ### How does this work with Claude Code?
 
@@ -172,6 +177,19 @@ npx @modelcontextprotocol/inspector firebase-mcp
 ```
 
 ## Available Tools
+
+### 🗂️ Project Tools
+
+| Tool                       | Description                                              |
+| -------------------------- | ------------------------------------------------------- |
+| `firebase_current_project` | Show the project the server is currently operating on   |
+| `firebase_list_projects`   | List projects the active credentials can access         |
+| `firebase_switch_project`  | Switch the active project at runtime (same credentials) |
+
+> `firebase_list_projects` and `firebase_switch_project` work best with a local
+> gcloud session (`gcloud auth application-default login`) or a service account
+> that has cross-project access. `firebase_list_projects` uses the Cloud
+> Resource Manager API, which must be enabled for the credentials.
 
 ### 🔐 Auth Tools
 
