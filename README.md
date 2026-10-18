@@ -13,6 +13,7 @@ A command-based (stdio) [Model Context Protocol](https://modelcontextprotocol.io
 ## Features
 
 - **🗂️ Project Tools** — Show the active project, list accessible projects & switch at runtime
+- **💶 Billing Tool** — Show the billing account, status, currency & budgets for a project
 - **🔐 Auth Tools** — List, get, create, update, delete users & set custom claims
 - **📄 Firestore Tools** — Browse collections, read/write/query/delete documents
 - **📦 Storage Tools** — List, upload, download, copy, move & delete files, generate signed URLs
@@ -191,6 +192,21 @@ npx @modelcontextprotocol/inspector firebase-mcp
 > gcloud session (`gcloud auth application-default login`) or a service account
 > that has cross-project access. `firebase_list_projects` uses the Cloud
 > Resource Manager API, which must be enabled for the credentials.
+
+### 💶 Billing Tool
+
+| Tool                      | Description                                                        |
+| ------------------------- | ----------------------------------------------------------------- |
+| `firebase_billing_status` | Billing account, status, currency & budgets (optional `projectId`) |
+
+> Uses the Cloud Billing API and needs **no setup**. It reports which billing
+> account the project is linked to, whether billing is enabled, the account
+> currency, and any configured budgets (best-effort).
+>
+> **Actual spend/cost amounts are not available** through the Cloud Billing API.
+> Google only exposes real cost breakdowns via a [BigQuery billing export](https://cloud.google.com/billing/docs/how-to/export-data-bigquery)
+> or the Billing → Reports page in the Cloud Console. This tool deliberately
+> depends on neither, so it works out of the box but cannot show euros spent.
 
 ### 🔐 Auth Tools
 

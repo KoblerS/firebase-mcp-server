@@ -319,6 +319,21 @@ export function switchProject(projectId: string): string {
 }
 
 /**
+ * Returns an OAuth2 access token for the active credentials. Usable as a
+ * Bearer token against Google Cloud REST APIs with the same auth as the
+ * Admin SDK (service account or local gcloud/ADC session).
+ */
+export async function getAccessToken(): Promise<string> {
+  const app = initFirebase();
+  const credential = app.options.credential;
+  if (!credential) {
+    throw new Error("No credential available on the active Firebase app.");
+  }
+  const { access_token: accessToken } = await credential.getAccessToken();
+  return accessToken;
+}
+
+/**
  * Lists the Google Cloud projects the active credentials can access, via the
  * Cloud Resource Manager API. Requires the API to be enabled and the
  * credentials to have resourcemanager.projects.list permission.
@@ -332,13 +347,7 @@ export async function listAccessibleProjects(): Promise<
     active: boolean;
   }>
 > {
-  const app = initFirebase();
-  const credential = app.options.credential;
-  if (!credential) {
-    throw new Error("No credential available on the active Firebase app.");
-  }
-
-  const { access_token: accessToken } = await credential.getAccessToken();
+  const accessToken = await getAccessToken();
 
   const results: Array<{
     projectId: string;
